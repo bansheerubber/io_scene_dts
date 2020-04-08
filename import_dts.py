@@ -397,7 +397,6 @@ def load(operator, context, filepath,
 
                 for frameIndex in range(seq.numKeyframes):
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
-                    vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
 
                     if seq.flags & Sequence.UniformScale:
                         s = shape.node_uniform_scales[index]
