@@ -19,7 +19,7 @@ Visibility animations are here, thanks to a guest appearance from irrelevant.irr
 
 NOW YOU CAN HARNESS THIS POWER USING THESE SIMPLE STEPS!:
 
-1. Like the rest of animations, this is done through empties. If you select an empty you want to visibilityify, you can go to its **Object Properties** to start animating away.
+1. Like the rest of animations, this is done through empties. If you select an empty you want to visibilityify, you can go to its **Object Properties** to start animating away.  
 ![Blessing of Jim](https://bansheerubber.com/i/f/nxWKI.png)
 2. To animate this property, hover over it and press **I** on your keyboard. BE CAREFUL! If you are not, you will be suprised to see it start glowing a **Yellow Color**. If you glance over to your **Graph Editor**, you will see that you have added a keyframe. Keep adding more keyframes by advancing to subsequent frames and pressing **I** over and over again. Once completed, you should have a beautiful curve of your choosing.  
 ![Fear Simi](https://bansheerubber.com/i/f/buteO.png)
