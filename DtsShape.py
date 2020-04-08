@@ -239,7 +239,7 @@ class DtsShape(object):
 		assert self.subshapes
 		assert len(self.nodes) == len(self.default_translations)
 		assert len(self.nodes) == len(self.default_rotations)
-		assert len(self.objects) == len(self.objectstates)
+		assert len(self.objects) <= len(self.objectstates)
 		assert len(self.node_arbitrary_scale_factors) == len(self.node_arbitrary_scale_rots)
 		assert len(self.ground_translations) == len(self.ground_rotations)
 

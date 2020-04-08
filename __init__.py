@@ -382,6 +382,29 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.prop(obj.torque_props, "ifl_name", text="")
         sublayout = layout.column()
         sublayout.enabled = obj.torque_props.use_ifl
+    
+class TorqueVisProperties(bpy.types.PropertyGroup):
+    vis_value = FloatProperty(name="Visibility", default=1, min=0, max=1)#, hard_min=0, hard_max=1)
+
+class TorqueVisPanel(bpy.types.Panel):
+    bl_idname = "EMPTY_PT_torque_vis"
+    bl_label = "Torque"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "object"
+
+    @classmethod
+    def poll(cls, context):
+        return context.view_layer.objects.active.type == "EMPTY"
+    
+    def draw(self, context):
+        obj = context.view_layer.objects.active
+
+        row = self.layout.row()
+        row.label(text="Visibility")
+        col = row.column()
+        col.prop(obj.torque_vis_props, "vis_value")
+
 
 def menu_func_import_dts(self, context):
     self.layout.operator(ImportDTS.bl_idname, text="Torque (.dts)")
@@ -404,9 +427,14 @@ def register():
     bpy.utils.register_class(HideBlockheadNodes)
     bpy.utils.register_class(TorqueMaterialProperties)
     bpy.utils.register_class(TorqueMaterialPanel)
+    bpy.utils.register_class(TorqueVisProperties)
+    bpy.utils.register_class(TorqueVisPanel)
     
     bpy.types.Material.torque_props = PointerProperty(
         type=TorqueMaterialProperties)
+    
+    bpy.types.Object.torque_vis_props = PointerProperty(
+        type=TorqueVisProperties)
     
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dts)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dsq)
@@ -422,6 +450,7 @@ def unregister():
     bpy.utils.unregister_class(HideBlockheadNodes)
     bpy.utils.unregister_class(TorqueMaterialProperties)
     bpy.utils.unregister_class(TorqueMaterialPanel)
+    bpy.utils.unregister_class(TorqueVisPanel)
 
     del bpy.types.Material.torque_props
 

@@ -125,6 +125,9 @@ def ob_rotation_curves(ob):
     data_path, array_count = fcurves_path_from_rotation(ob)
     return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
+def ob_vis_curves(ob): 
+    return ob_curves_array(ob, 'torque_vis_props.vis_value', 1)
+
 def evaluate_all(curves, frame):
     return tuple(map(lambda c: c.evaluate(frame), curves))
 

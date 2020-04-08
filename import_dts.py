@@ -6,7 +6,7 @@ from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
 from .util import default_materials, resolve_texture, get_rgb_colors, fail, \
-    ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, evaluate_all
+    ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_vis_curves, ob_rotation_data, evaluate_all
 
 import operator
 from itertools import zip_longest, count
@@ -344,6 +344,7 @@ def load(operator, context, filepath,
             nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.rotationMatters))))
             nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.translationMatters))))
             nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.scaleMatters))))
+            nodesVis = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(shape.nodes, seq.visMatters))))
 
             step = 1
 
@@ -417,6 +418,28 @@ def load(operator, context, filepath,
                         key.co = (
                             globalToolIndex + frameIndex * step,
                             vec[curve.array_index])
+            
+            for mattersIndex, node in enumerate(nodesVis):
+                ob = node_obs_val[node]
+                curves = ob_vis_curves(ob)
+
+                # if not hasattr(ob, 'vis'):
+                #    ob['vis'] = shape.objectstates[seq.baseObjectState].vis
+                
+                ob.torque_vis_props.vis_value = shape.objectstates[seq.baseObjectState].vis
+
+                for frameIndex in range(seq.numKeyframes):
+                    vis = shape.objectstates[seq.baseObjectState + mattersIndex * seq.numKeyframes + frameIndex].vis
+
+                    for curve in curves:
+                        curve.keyframe_points.add(1)
+                        key = curve.keyframe_points[-1]
+                        key.interpolation = "LINEAR"
+                        key.co = (
+                            globalToolIndex + frameIndex * step,
+                            vis)
+                        
+                        print(vis)
 
             # Insert a reference frame immediately before the animation
             # insert_reference(globalToolIndex - 2, shape.nodes)

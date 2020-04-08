@@ -671,10 +671,16 @@ def save(operator, context, filepath,
         for frame in frame_indices:
             scene.frame_set(frame)
 
-            for ob in shape.nodes:
-                if ob.armature is not None:
+            for node in shape.nodes:
+                if node.armature is not None:
                     continue
-                animation_data[frame][ob] = ob.matrix.decompose()
+                
+                if node.bl_ob is None:
+                    vis = 1.0
+                else:
+                    vis = node.bl_ob.torque_vis_props.vis_value
+
+                animation_data[frame][node] = node.matrix.decompose() + (vis,)
 
         for ob in shape.nodes:
             if ob.armature is not None:
@@ -686,6 +692,7 @@ def save(operator, context, filepath,
 
             base_translation, base_rotation, _ = node.matrix.decompose()
             base_scale = Vector((1.0, 1.0, 1.0))
+            base_object_state = ObjectState(ob.bl_ob.get("torque_vis_props.vis_value", 1.0), 0, 0)
 
             if ob.animation_data is not None and ob.animation_data.action is not None:
                 fcurves = ob.animation_data.action.fcurves
@@ -693,6 +700,7 @@ def save(operator, context, filepath,
                 curves_rotation = array_from_fcurves_rotation(fcurves, ob)
                 curves_translation = array_from_fcurves(fcurves, "location", 3)
                 curves_scale = array_from_fcurves(fcurves, "scale", 3)
+                curves_vis = array_from_fcurves(fcurves, "torque_vis_props.vis_value", 1)
 
                 # Decide what matters by presence of f-curves
                 if curves_rotation and fcurves_keyframe_in_range(curves_rotation, frame_start, frame_end):
@@ -703,10 +711,13 @@ def save(operator, context, filepath,
 
                 if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
                     seq.scaleMatters[index] = True
+                
+                if curves_vis and fcurves_keyframe_in_range(curves_vis, frame_start, frame_end):
+                    seq.visMatters[index] = True
 
                 # Write the data where it matters
                 for frame in frame_indices:
-                    translation, rotation, scale = animation_data[frame][ob]
+                    translation, rotation, scale, vis = animation_data[frame][ob]
 
                     if seq.translationMatters[index]:
                         if seq.flags & Sequence.Blend:
@@ -720,6 +731,9 @@ def save(operator, context, filepath,
 
                     if seq.scaleMatters[index]:
                         shape.node_aligned_scales.append(scale)
+                    
+                    if seq.visMatters[index]:
+                        shape.objectstates.append(ObjectState(vis, frame, 0))
 
     if debug_report:
         print("Writing debug report")
