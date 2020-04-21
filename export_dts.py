@@ -766,13 +766,26 @@ def write_material_textures(mode, filepath, shape):
             continue
 
         bl_mat = material.bl_mat
-        color = bl_mat.diffuse_color * bl_mat.diffuse_intensity
-        color.r = linearrgb_to_srgb(color.r)
-        color.g = linearrgb_to_srgb(color.g)
-        color.b = linearrgb_to_srgb(color.b)
+        new_color = [0, 0, 0]
+
+        if bl_mat.use_nodes:
+            for node in bl_mat.node_tree.nodes:
+                if node.type == "BSDF_PRINCIPLED":
+                    color = node.inputs['Base Color'].default_value
+
+                    new_color[0] = linearrgb_to_srgb(color[0])
+                    new_color[1] = linearrgb_to_srgb(color[1])
+                    new_color[2] = linearrgb_to_srgb(color[2])
+
+                    print(new_color)
+        else:
+            color = bl_mat.diffuse_color
+            new_color[0] = linearrgb_to_srgb(color[0])
+            new_color[1] = linearrgb_to_srgb(color[1])
+            new_color[2] = linearrgb_to_srgb(color[2])
 
         image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
-        image.pixels = (color.r, color.g, color.b, 1.0) * 256
+        image.pixels = (new_color[0], new_color[1], new_color[2], 1.0) * 256
         image.filepath_raw = os.path.join(os.path.dirname(filepath), material.name + ".png")
         image.file_format = "PNG"
         image.save()
