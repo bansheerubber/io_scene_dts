@@ -784,6 +784,8 @@ def write_material_textures(mode, filepath, shape):
             new_color[1] = linearrgb_to_srgb(color[1])
             new_color[2] = linearrgb_to_srgb(color[2])
 
+            print("Using viewport color")
+
         image = bpy.data.images.new(material.name.lower() + "_generated", 16, 16)
         image.pixels = (new_color[0], new_color[1], new_color[2], 1.0) * 256
         image.filepath_raw = os.path.join(os.path.dirname(filepath), material.name + ".png")

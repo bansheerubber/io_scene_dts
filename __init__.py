@@ -372,6 +372,12 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.prop(obj.torque_props, "use_transparency")
 
         sublayout = layout.row()
+        sublayout.prop(obj.torque_props, "t_wrap")
+
+        sublayout = layout.row()
+        sublayout.prop(obj.torque_props, "s_wrap")
+
+        sublayout = layout.row()
         sublayout.enabled = obj.torque_props.use_transparency
         sublayout.prop(obj.torque_props, "blend_mode", expand=True)
 
