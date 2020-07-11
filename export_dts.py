@@ -115,7 +115,7 @@ def seq_float_eq(a, b):
     return all(abs(i - j) < 0.000001 for i, j in zip(a, b))
 
 def export_empty_node(lookup, shape, select_object, ob, parent=-1):
-    if select_object and not ob.select:
+    if select_object and not ob.select_get():
         lookup[ob] = False
         return
 
@@ -171,7 +171,7 @@ def save_nodes(scene, shape, select_object):
 
         if ob.type == 'EMPTY':
             export_empty_node(node_lookup, shape, select_object, ob)
-        elif ob.type == 'ARMATURE' and (ob.select or not select_object):
+        elif ob.type == 'ARMATURE' and (ob.select_get() or not select_object):
             top_bones = filter(lambda b: b.parent is None, ob.data.bones)
             export_bones(node_lookup, shape, ob, top_bones)
 
@@ -223,7 +223,7 @@ def save_meshes(scene, shape, node_lookup, select_object):
         if bobj.type != "MESH":
             continue
 
-        if select_object and not bobj.select:
+        if select_object and not bobj.select_get():
             continue
 
         if bobj.name.lower() == "bounds":

@@ -378,7 +378,7 @@ def load(operator, context, filepath,
                         if reference_frame is None:
                             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
                         ref_rot = Quaternion(evaluate_all(curves, reference_frame))
-                        rot = ref_rot * rot
+                        rot = ref_rot @ rot
                     if mode == 'AXIS_ANGLE':
                         rot = rot.to_axis_angle()
                     elif mode != 'QUATERNION':
@@ -479,17 +479,18 @@ def load(operator, context, filepath,
 
             add_vertex_groups(mesh, bobj, shape)
 
-            if use_armature:
-                bobj.parent = root_ob
-                bobj.parent_bone = bone_names[obj.node]
-                bobj.parent_type = "BONE"
-                bobj.matrix_world = shape.nodes[obj.node].mat
+            if obj.node != -1:
+                if use_armature:
+                    bobj.parent = root_ob
+                    bobj.parent_bone = bone_names[obj.node]
+                    bobj.parent_type = "BONE"
+                    bobj.matrix_world = shape.nodes[obj.node].mat
 
-                if mtype == Mesh.SkinType:
-                    modifier = bobj.modifiers.new('Armature', 'ARMATURE')
-                    modifier.object = root_ob
-            else:
-                bobj.parent = node_obs[obj.node]
+                    if mtype == Mesh.SkinType:
+                        modifier = bobj.modifiers.new('Armature', 'ARMATURE')
+                        modifier.object = root_ob
+                else:
+                    bobj.parent = node_obs[obj.node]
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
 
@@ -520,7 +521,8 @@ def load(operator, context, filepath,
 def add_vertex_groups(mesh, ob, shape):
     for node, initial_transform in mesh.bones:
         # TODO: Handle initial_transform
-        ob.vertex_groups.new(shape.names[shape.nodes[node].name])
+        if node != -1:
+            ob.vertex_groups.new(name=shape.names[shape.nodes[node].name])
 
     for vertex, bone, weight in mesh.influences:
         ob.vertex_groups[bone].add((vertex,), weight, 'REPLACE')

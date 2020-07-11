@@ -184,6 +184,15 @@ def write_debug_report(filepath, shape):
             p("    visMatters: " + show_matters(seq.visMatters))
             p("    frameMatters: " + show_matters(seq.frameMatters))
             p("    matFrameMatters: " + show_matters(seq.matFrameMatters))
+        
+        p("Object States (" + str(len(shape.objectstates)) + "):")
+        for i, objectstate in enumerate(shape.objectstates):
+            p("  " + str(i))
+            p("    " + str(objectstate.vis))
+            p("    " + str(objectstate.frame))
+            p("    " + str(objectstate.matFrame))
+        
+        p(f"{len(seq.visMatters)}")
 
         p("Names (" + str(len(shape.names)) + "):")
         for i, name in enumerate(shape.names):

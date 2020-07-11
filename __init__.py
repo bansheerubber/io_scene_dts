@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Torque DTS format",
     "author": "port",
-    "version": (0, 3, 2),
+    "version": (0, 3, 3),
     "blender": (2, 81, 0),
     "location": "File > Import-Export",
     "description": "Import-Export DTS, Import DTS mesh, UV's, "
@@ -326,7 +326,7 @@ class HideBlockheadNodes(bpy.types.Operator):
 
     def execute(self, context):
         for ob in context.scene.objects:
-            if ob.select and ob.type == "MESH" and ob.name in self.blacklist:
+            if ob.select_get() and ob.type == "MESH" and ob.name in self.blacklist:
                 ob.hide = True
 
         return {"FINISHED"}

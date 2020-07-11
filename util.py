@@ -149,10 +149,11 @@ def array_from_fcurves_rotation(curves, ob):
 
 def fcurves_keyframe_in_range(curves, start, end):
     for curve in curves:
-        for keyframe in curve.keyframe_points:
-            frame = keyframe.co[0]
-            if frame >= start and frame <= end:
-                return True
+        if curve != None:
+            for keyframe in curve.keyframe_points:
+                frame = keyframe.co[0]
+                if frame >= start and frame <= end:
+                    return True
 
     return False
 
