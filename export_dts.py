@@ -672,10 +672,10 @@ def save(operator, context, filepath,
             scene.frame_set(frame)
 
             for node in shape.nodes:
-                if node.armature is not None:
+                if hasattr(node, "animation_data") == True and node.armature is not None:
                     continue
                 
-                if node.bl_ob is None:
+                if hasattr(node, "bl_ob") == False or node.bl_ob is None:
                     vis = 1.0
                 else:
                     vis = node.bl_ob.torque_vis_props.vis_value
@@ -683,7 +683,7 @@ def save(operator, context, filepath,
                 animation_data[frame][node] = node.matrix.decompose() + (vis,)
 
         for ob in shape.nodes:
-            if ob.armature is not None:
+            if hasattr(ob, "animation_data") == True and ob.armature is not None:
                 continue
 
             # index = node_lookup[ob].index
@@ -692,9 +692,14 @@ def save(operator, context, filepath,
 
             base_translation, base_rotation, _ = node.matrix.decompose()
             base_scale = Vector((1.0, 1.0, 1.0))
-            base_object_state = ObjectState(ob.bl_ob.get("torque_vis_props.vis_value", 1.0), 0, 0)
 
-            if ob.animation_data is not None and ob.animation_data.action is not None:
+            vis = 1.0
+            if hasattr(node, "bl_ob") == True and node.bl_ob is not None:
+                vis = ob.bl_ob.get("torque_vis_props.vis_value", 1.0)
+
+            base_object_state = ObjectState(vis, 0, 0)
+
+            if hasattr(ob, "animation_data") == True and ob.animation_data is not None and ob.animation_data.action is not None:
                 fcurves = ob.animation_data.action.fcurves
 
                 curves_rotation = array_from_fcurves_rotation(fcurves, ob)
