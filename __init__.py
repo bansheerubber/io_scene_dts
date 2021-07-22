@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Torque DTS format",
-    "author": "port",
-    "version": (0, 3, 4),
+    "author": "port & bansheerubber",
+    "version": (0, 3, 5),
     "blender": (2, 81, 0),
     "location": "File > Import-Export",
     "description": "Import-Export DTS, Import DTS mesh, UV's, "
@@ -49,32 +49,32 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     bl_idname = "import_scene.dts"
     bl_label = "Import DTS"
     bl_options = {'PRESET', 'UNDO'}
-
     filename_ext = ".dts"
-    filter_glob = StringProperty(
+
+    filter_glob: StringProperty(
         default="*.dts",
         options={'HIDDEN'},
         )
 
-    reference_keyframe = BoolProperty(
+    reference_keyframe: BoolProperty(
         name="Reference keyframe",
         description="Set a keyframe with the reference pose for blend animations",
         default=True,
         )
 
-    import_sequences = BoolProperty(
+    import_sequences: BoolProperty(
         name="Import sequences",
         description="Automatically add keyframes for embedded sequences",
         default=True,
         )
 
-    use_armature = BoolProperty(
+    use_armature: BoolProperty(
         name="Experimental: Skeleton as armature",
         description="Import bones into an armature instead of empties. Does not work with 'Import sequences'",
         default=False,
         )
 
-    debug_report = BoolProperty(
+    debug_report: BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
         options=debug_prop_options,
@@ -92,14 +92,14 @@ class ImportDSQ(bpy.types.Operator, ImportHelper):
     bl_idname = "import_scene.dsq"
     bl_label = "Import DSQ"
     bl_options = {'PRESET', 'UNDO'}
-
     filename_ext = ".dsq"
-    filter_glob = StringProperty(
+
+    filter_glob: StringProperty(
         default="*.dsq",
         options={'HIDDEN'},
         )
 
-    debug_report = BoolProperty(
+    debug_report: BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DSQ to a file",
         options=debug_prop_options,
@@ -118,31 +118,32 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
     bl_idname = "export_scene.dts"
     bl_label = 'Export DTS'
     bl_options = {'PRESET'}
-
     filename_ext = ".dts"
-    filter_glob = StringProperty(
+    check_extension = True
+
+    filter_glob: StringProperty(
         default="*.dts",
         options={'HIDDEN'},
         )
 
-    select_object = BoolProperty(
+    select_object: BoolProperty(
         name="Selected objects only",
         description="Export selected objects (empties, meshes) only",
         default=False,
         )
-    select_marker = BoolProperty(
+    select_marker: BoolProperty(
         name="Selected markers only",
         description="Export selected timeline markers only, used for sequences",
         default=False,
         )
 
-    blank_material = BoolProperty(
+    blank_material: BoolProperty(
         name="Blank material",
         description="Add a blank material to meshes with none assigned",
         default=True,
         )
 
-    generate_texture = EnumProperty(
+    generate_texture: EnumProperty(
         name="Generate textures",
         description="Automatically generate solid color textures for materials",
         default="disabled",
@@ -154,20 +155,18 @@ class ExportDTS(bpy.types.Operator, ExportHelper):
             ("all-always", "All (always)", "Generate textures for all materials"))
         )
 
-    apply_modifiers = BoolProperty(
+    apply_modifiers: BoolProperty(
         name="Apply modifiers",
         description="Apply modifiers to meshes",
         default=True,
         )
 
-    debug_report = BoolProperty(
+    debug_report: BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DTS to a file",
         options=debug_prop_options,
         default=False,
         )
-
-    check_extension = True
 
     def execute(self, context):
         from . import export_dts
@@ -180,27 +179,26 @@ class ExportDSQ(bpy.types.Operator, ExportHelper):
     bl_idname = "export_scene.dsq"
     bl_label = 'Export DSQ'
     bl_options = {'PRESET'}
-
     filename_ext = ".dsq"
-    filter_glob = StringProperty(
+    check_extension = True
+
+    filter_glob: StringProperty(
         default="*.dsq",
         options={'HIDDEN'},
         )
 
-    select_marker = BoolProperty(
+    select_marker: BoolProperty(
         name="Selection only",
         description="Export selected timeline markers only",
         default=False,
         )
 
-    debug_report = BoolProperty(
+    debug_report: BoolProperty(
         name="Write debug report",
         description="Dump out all the information from the DSQ to a file",
         options=debug_prop_options,
         default=False,
         )
-
-    check_extension = True
 
     def execute(self, context):
         from . import export_dsq
@@ -332,7 +330,7 @@ class HideBlockheadNodes(bpy.types.Operator):
         return {"FINISHED"}
 
 class TorqueMaterialProperties(bpy.types.PropertyGroup):
-    blend_mode = EnumProperty(
+    blend_mode: EnumProperty(
         name="Blend mode",
         items=(
             ("ADDITIVE", "Additive", "White is white, black is transparent"),
@@ -340,12 +338,12 @@ class TorqueMaterialProperties(bpy.types.PropertyGroup):
             ("NONE", "None", "I don't know how to explain this, try it yourself"),
         ),
         default="ADDITIVE")
-    s_wrap = BoolProperty(name="S-Wrap", default=True)
-    t_wrap = BoolProperty(name="T-Wrap", default=True)
-    use_ifl = BoolProperty(name="IFL")
-    use_transparency = BoolProperty(name="Use Transparency")
-    use_shadeless = BoolProperty(name="Shadeless")
-    ifl_name = StringProperty(name="Name")
+    s_wrap: BoolProperty(name="S-Wrap", default=True)
+    t_wrap: BoolProperty(name="T-Wrap", default=True)
+    use_ifl: BoolProperty(name="IFL")
+    use_transparency: BoolProperty(name="Use Transparency")
+    use_shadeless: BoolProperty(name="Shadeless")
+    ifl_name: StringProperty(name="Name")
 
 class TorqueMaterialPanel(bpy.types.Panel):
     bl_idname = "MATERIAL_PT_torque"
@@ -390,7 +388,7 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.enabled = obj.torque_props.use_ifl
     
 class TorqueVisProperties(bpy.types.PropertyGroup):
-    vis_value = FloatProperty(name="Visibility", default=1, min=0, max=1)#, hard_min=0, hard_max=1)
+    vis_value: FloatProperty(name="Visibility", default=1, min=0, max=1)#, hard_min=0, hard_max=1)
 
 class TorqueVisPanel(bpy.types.Panel):
     bl_idname = "EMPTY_PT_torque_vis"
@@ -436,11 +434,9 @@ def register():
     bpy.utils.register_class(TorqueVisProperties)
     bpy.utils.register_class(TorqueVisPanel)
     
-    bpy.types.Material.torque_props = PointerProperty(
-        type=TorqueMaterialProperties)
+    bpy.types.Material.torque_props = PointerProperty(type=TorqueMaterialProperties)
     
-    bpy.types.Object.torque_vis_props = PointerProperty(
-        type=TorqueVisProperties)
+    bpy.types.Object.torque_vis_props = PointerProperty(type=TorqueVisProperties)
     
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dts)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dsq)
