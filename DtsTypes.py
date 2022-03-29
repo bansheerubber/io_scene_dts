@@ -447,7 +447,7 @@ def write_bit_set(fd, bits):
         fd.write(pack("<ii", numWords, numWords))
 
         for word in words:
-                fd.write(pack("<i", word))
+                fd.write(pack("<I", word))
 
 class Sequence:
         UniformScale = bit(0)
