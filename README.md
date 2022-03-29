@@ -1,4 +1,10 @@
-### Blender 2.8 Fork
+### Blender 2.8+ Fork
+
+Leaving this here for potential maintainers or onlookers:  
+DTS specification: https://web.archive.org/web/20200906020103/http://docs.garagegames.com/torque-3d/official/content/documentation/Artist%20Guide/Formats/dts_format.html  
+DSQ specification: https://web.archive.org/web/20200906020104/http://docs.garagegames.com/torque-3d/official/content/documentation/Artist%20Guide/Formats/dsq_format.html  
+
+---
 
 \\!/ WARNING \\!/ YOU ARE ABOUT TO READ IMPORTANT INFORMATION!
 
