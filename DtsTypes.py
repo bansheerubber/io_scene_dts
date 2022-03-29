@@ -432,7 +432,7 @@ class Material:
 
 def read_bit_set(fd):
         dummy, numWords = unpack("<ii", fd.read(8))
-        words = unpack(str(numWords) + "i", fd.read(4 * numWords))
+        words = unpack(str(numWords) + "I", fd.read(4 * numWords))
         total = len(words) * 32
         return [(words[i >> 5] & (1 << (i & 31))) != 0 for i in range(total)]
 
