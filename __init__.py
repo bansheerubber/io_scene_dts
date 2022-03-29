@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Torque DTS format",
-    "author": "port & bansheerubber",
-    "version": (0, 3, 5),
+    "author": "port & bansheerubber & irrelevant.irreverent & Eagle517",
+    "version": (0, 3, 6),
     "blender": (2, 81, 0),
     "location": "File > Import-Export",
     "description": "Import-Export DTS, Import DTS mesh, UV's, "
