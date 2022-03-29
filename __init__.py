@@ -344,7 +344,7 @@ class TorqueMaterialProperties(bpy.types.PropertyGroup):
     use_transparency: BoolProperty(name="Use Transparency")
     use_shadeless: BoolProperty(name="Shadeless")
     ifl_name: StringProperty(name="Name")
-    no_mip_mapping: BoolProperty(name="No Mip Mapping", default=True)
+    no_mip_mapping: BoolProperty(name="No Mip Mapping", default=False)
     mip_map_zero_border: BoolProperty(name="Mip Map Zero Border", default=False)
 
 class TorqueMaterialPanel(bpy.types.Panel):
