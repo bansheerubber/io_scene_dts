@@ -90,6 +90,11 @@ def import_material(color_source, dmat, filepath):
     if dmat.flags & Material.IFLMaterial:
         bmat.torque_props.use_ifl = True
 
+    if dmat.flags & Material.NoMipMap:
+        bmat.torque_props.no_mip_mapping = True
+    if dmat.flags & Material.MipMapZeroBorder:
+        bmat.torque_props.mip_map_zero_border = True
+
     # TODO: MipMapZeroBorder, IFLFrame, DetailMap, BumpMap, ReflectanceMap
     # AuxilaryMask?
 
@@ -418,14 +423,14 @@ def load(operator, context, filepath,
                         key.co = (
                             globalToolIndex + frameIndex * step,
                             vec[curve.array_index])
-            
+
             for mattersIndex, node in enumerate(nodesVis):
                 ob = node_obs_val[node]
                 curves = ob_vis_curves(ob)
 
                 # if not hasattr(ob, 'vis'):
                 #    ob['vis'] = shape.objectstates[seq.baseObjectState].vis
-                
+
                 ob.torque_vis_props.vis_value = shape.objectstates[seq.baseObjectState].vis
 
                 for frameIndex in range(seq.numKeyframes):
@@ -438,7 +443,7 @@ def load(operator, context, filepath,
                         key.co = (
                             globalToolIndex + frameIndex * step,
                             vis)
-                        
+
                         print(vis)
 
             # Insert a reference frame immediately before the animation

@@ -344,6 +344,8 @@ class TorqueMaterialProperties(bpy.types.PropertyGroup):
     use_transparency: BoolProperty(name="Use Transparency")
     use_shadeless: BoolProperty(name="Shadeless")
     ifl_name: StringProperty(name="Name")
+    no_mip_mapping: BoolProperty(name="No Mip Mapping", default=False)
+    mip_map_zero_border: BoolProperty(name="Mip Map Zero Border", default=False)
 
 class TorqueMaterialPanel(bpy.types.Panel):
     bl_idname = "MATERIAL_PT_torque"
@@ -386,7 +388,14 @@ class TorqueMaterialPanel(bpy.types.Panel):
         sublayout.prop(obj.torque_props, "ifl_name", text="")
         sublayout = layout.column()
         sublayout.enabled = obj.torque_props.use_ifl
-    
+
+        row = layout.row()
+        sublayout = row.column()
+        sublayout.prop(obj.torque_props, "no_mip_mapping")
+        sublayout = row.column()
+        sublayout.enabled = not obj.torque_props.no_mip_mapping
+        sublayout.prop(obj.torque_props, "mip_map_zero_border")
+
 class TorqueVisProperties(bpy.types.PropertyGroup):
     vis_value: FloatProperty(name="Visibility", default=1, min=0, max=1)#, hard_min=0, hard_max=1)
 
@@ -400,7 +409,7 @@ class TorqueVisPanel(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         return context.view_layer.objects.active.type == "EMPTY"
-    
+
     def draw(self, context):
         obj = context.view_layer.objects.active
 
@@ -433,11 +442,11 @@ def register():
     bpy.utils.register_class(TorqueMaterialPanel)
     bpy.utils.register_class(TorqueVisProperties)
     bpy.utils.register_class(TorqueVisPanel)
-    
+
     bpy.types.Material.torque_props = PointerProperty(type=TorqueMaterialProperties)
-    
+
     bpy.types.Object.torque_vis_props = PointerProperty(type=TorqueVisProperties)
-    
+
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dts)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dsq)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dts)

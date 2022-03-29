@@ -89,8 +89,13 @@ def export_material(mat, shape):
         flags |= Material.SWrap
     if mat.torque_props.t_wrap:
         flags |= Material.TWrap
+
     flags |= Material.NeverEnvMap
-    flags |= Material.NoMipMap
+
+    if mat.torque_props.no_mip_mapping:
+        flags |= Material.NoMipMap
+    if mat.torque_props.mip_map_zero_border:
+        flags |= Material.MipMapZeroBorder
 
     if mat.torque_props.use_ifl:
         flags |= Material.IFLMaterial
@@ -240,7 +245,7 @@ def save_meshes(scene, shape, node_lookup, select_object):
         if bobj.users_collection:
             if len(bobj.users_collection) > 1:
                 print("Warning: Mesh {} is in multiple groups".format(bobj.name))
-			
+
             # gyt: make sure that this isn't one of the default collections
             if "collection" in bobj.users_collection[0].name.lower():
                 lod_name = "detail32"
@@ -674,7 +679,7 @@ def save(operator, context, filepath,
             for node in shape.nodes:
                 if hasattr(node, "animation_data") == True and node.armature is not None:
                     continue
-                
+
                 if hasattr(node, "bl_ob") == False or node.bl_ob is None:
                     vis = 1.0
                 else:
@@ -716,7 +721,7 @@ def save(operator, context, filepath,
 
                 if curves_scale and fcurves_keyframe_in_range(curves_scale, frame_start, frame_end):
                     seq.scaleMatters[index] = True
-                
+
                 if curves_vis and fcurves_keyframe_in_range(curves_vis, frame_start, frame_end):
                     seq.visMatters[index] = True
 
@@ -736,7 +741,7 @@ def save(operator, context, filepath,
 
                     if seq.scaleMatters[index]:
                         shape.node_aligned_scales.append(scale)
-                    
+
                     if seq.visMatters[index]:
                         shape.objectstates.append(ObjectState(vis, frame, 0))
 
