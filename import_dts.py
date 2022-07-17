@@ -462,11 +462,6 @@ def load(operator, context, filepath,
 
     # Then put objects in the armatures
     for obj in shape.objects:
-        if obj.node == -1:
-            print('Warning: Object {} is not attached to a node, ignoring'
-                  .format(shape.names[obj.name]))
-            continue
-
         for meshIndex in range(obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + meshIndex]
             mtype = mesh.type
