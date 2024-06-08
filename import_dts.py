@@ -1,6 +1,7 @@
 import bpy
 import os
 from bpy_extras.io_utils import unpack_list
+import mathutils
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
@@ -108,10 +109,10 @@ def create_bobj(context, dmesh, materials, shape, obj):
     me = bpy.data.meshes.new("Mesh")
 
     faces = []
+    face_mats = []
     material_indices = {}
 
     indices_pass = index_pass()
-
     for prim in dmesh.primitives:
         if prim.type & Primitive.Indexed:
             indices = dmesh.indices
@@ -131,52 +132,51 @@ def create_bobj(context, dmesh, materials, shape, obj):
             even = True
             for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
                 if even:
-                    faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+                    faces.append((indices[i], indices[i - 1], indices[i - 2]))
+                    face_mats.append(dmat)
                 else:
-                    faces.append(((indices[i - 2], indices[i - 1], indices[i]), dmat))
+                    faces.append((indices[i - 2], indices[i - 1], indices[i]))
+                    face_mats.append(dmat)
                 even = not even
         elif prim.type & Primitive.Fan:
             even = True
             for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
                 if even:
-                    faces.append(((indices[i], indices[i - 1], indices[0]), dmat))
+                    faces.append((indices[i], indices[i - 1], indices[0]))
+                    face_mats.append(dmat)
                 else:
-                    faces.append(((indices[0], indices[i - 1], indices[i]), dmat))
+                    faces.append((indices[0], indices[i - 1], indices[i]))
+                    face_mats.append(dmat)
                 even = not even
         else: # Default to Triangle Lists (prim.type & Primitive.Triangles)
             for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements, 3):
-                faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+                faces.append((indices[i], indices[i - 1], indices[i - 2]))
+                face_mats.append(dmat)
 
-    me.vertices.add(len(dmesh.verts))
-    me.vertices.foreach_set("co", unpack_list(dmesh.verts))
-    me.vertices.foreach_set("normal", unpack_list(dmesh.normals))
+    
+    me.from_pydata(dmesh.verts, [], faces)
+    for poly, mat_index in zip(me.polygons, face_mats):
+        poly.material_index = material_indices[mat_index]
 
-    me.polygons.add(len(faces))
-    me.loops.add(len(faces) * 3)
+    # Create a new UV map if it doesn't exist
+    if not me.uv_layers:
+        me.uv_layers.new()
+        
+    # Assign UV coordinates to the vertices
+    uv_layer = me.uv_layers.active.data
+    for poly in me.polygons:
+        for loop_index in poly.loop_indices:
+            loop = me.loops[loop_index]
+            uv_layer[loop.index].uv = (dmesh.tverts[loop.vertex_index][0], 1 - dmesh.tverts[loop.vertex_index][1])
 
     # gyt add: we have to create the bobj here, because we need it to do UV shit in 2.8
     bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), me)
-
-    bpy.ops.mesh.uv_texture_add({"object": bobj})
-    uvs = me.uv_layers[0]
-
-    for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
-        poly.use_smooth = True # DTS geometry is always smooth shaded
-        poly.loop_total = 3
-        poly.loop_start = i * 3
-
-        if dmat:
-            poly.material_index = material_indices[dmat]
-
-        for j, index in zip(poly.loop_indices, verts):
-            me.loops[j].vertex_index = index
-            uv = dmesh.tverts[index]
-            uvs.data[j].uv = (uv.x, 1 - uv.y)
 
     me.validate()
     me.update()
 
     return bobj
+
 
 def file_base_name(filepath):
     return os.path.basename(filepath).rsplit(".", 1)[0]
@@ -247,21 +247,84 @@ def load(operator, context, filepath,
     if use_armature:
         root_arm = bpy.data.armatures.new(file_base_name(filepath))
         root_ob = bpy.data.objects.new(root_arm.name, root_arm)
-        root_ob.show_x_ray = True
+        root_ob.show_in_front = True
 
         context.collection.objects.link(root_ob)
-        context.collection.objects.active = root_ob
+        context.view_layer.objects.active = root_ob
+        root_arm.display_type = "STICK" #"OCTAHEDRAL"
+        
+        # bpy.ops.object.mode_set(mode="EDIT")
+        # edit_bones = root_arm.edit_bones
+        
+        # Create an empty for every node
+        # node_bones = {}
+        # for i, node in enumerate(shape.nodes):
+        #     node_name = shape.names[i]
+        #     node_index = i
+        #     # bone = root_arm.edit_bones.new(shape.names[node.name])
+        #     bone = root_arm.edit_bones.new(shape.names[node_index])
+            
+        #     node.bl_ob = bone
+        #     bone["nodeIndex"] = i
+            
+        #     node.mat = shape.default_rotations[i].to_matrix()
+        #     node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
+        #     # if node.parent != -1:
+        #     #     node.mat = shape.nodes[node.parent].mat * node.mat
+            
+        #     node_head = node.mat.to_translation()
+        #     node_tail = node.head + Vector((0, 0, 0.25))
+        #     # node_tail = node.mat.to_translation()
+        #     # node_head = node.tail - Vector((0, 0, 0.25))
+            
+        #     # bone.head = shape.default_translations[i]
+        #     bone.head = node_head
+        #     bone.tail = node_tail
+
+        #     if node.parent != -1:
+        #         bone.parent = node_bones[node.parent]
+                
+        #     bone.matrix = node.mat
+
+        #     # bone.location = shape.default_translations[i]
+        #     # bone.rotation_mode = "QUATERNION"
+        #     # bone.rotation_quaternion = shape.default_rotations[i]
+        #     # if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
+        #     #     ob.rotation_quaternion = (1, 0, 0, 0)
+            
+        #     node_bones[node.name] = bone
+        #     node_obs_val[node] = ob
+        
+        
+        
+        
+        
+        
+        
+        
 
         # Calculate armature-space matrix, head and tail for each node
-        for i, node in enumerate(shape.nodes):
-            node.mat = shape.default_rotations[i].to_matrix()
-            node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
-            if node.parent != -1:
-                node.mat = shape.nodes[node.parent].mat * node.mat
-            # node.head = node.mat.to_translation()
-            # node.tail = node.head + Vector((0, 0, 0.25))
-            # node.tail = node.mat.to_translation()
-            # node.head = node.tail - Vector((0, 0, 0.25))
+        shape_nodes = {x.name: x for x in shape.nodes}
+        print(len(shape.names))
+        print(len(shape_nodes.keys()))
+        print(shape.names)
+        print(shape_nodes.keys())
+        # for i, node in enumerate(shape.nodes):
+        #     node.mat = shape.default_rotations[i].to_matrix()
+        #     node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
+        #     print(f"{shape.names[node.name]}: -> {shape.names[shape.nodes[node.parent].name]}")
+            
+        #     if node.parent != -1:
+        #         node.mat = shape.nodes[node.parent].mat * node.mat
+                
+            
+        #     # print(f" MATRIX: {node.mat}")
+        #     # print(f" CHILD: {node.firstChild}")
+        #     # print(f" PARENT: {node.parent}")
+        #     # node.head = node.mat.to_translation()
+        #     # node.tail = node.head + Vector((0, 0, 0.25))
+        #     # node.tail = node.mat.to_translation()
+        #     # node.head = node.tail - Vector((0, 0, 0.25))
 
         bpy.ops.object.mode_set(mode="EDIT")
 
@@ -269,17 +332,48 @@ def load(operator, context, filepath,
         bone_names = []
 
         for i, node in enumerate(shape.nodes):
+            print(f"{shape.names[node.name]}: -> {shape.names[shape.nodes[node.parent].name]}")
+
             bone = root_arm.edit_bones.new(shape.names[node.name])
             # bone.use_connect = True
             # bone.head = node.head
             # bone.tail = node.tail
-            bone.head = (0, 0, -0.25)
-            bone.tail = (0, 0, 0)
+            bone.head = (0, 0, 0)
+            bone.tail = (0, 0, 0.25)
 
+            bone.use_relative_parent = True
             if node.parent != -1:
                 bone.parent = edit_bone_table[node.parent]
 
-            bone.matrix = node.mat
+            # bone.matrix = node.mat
+            node_quaternion = shape.default_rotations[i]
+            node_rot = node_quaternion.to_matrix().to_4x4()
+            node_loc = shape.default_translations[i]
+            bone.transform(node_rot)
+            bone.translate(node_loc)
+                        
+            # bone.head = node_loc
+            # bone.tail = shape.default_translations[i]
+            # bone.tail[0] += 0.25
+            # bone.matrix = node_loc @ node_rot
+            
+            
+            
+            #apply parent locs
+            # parent = node.parent
+            # while parent != -1:
+            #     parent_rotation = shape.default_rotations[node.parent]
+            #     parent_translation = shape.default_translations[node.parent]
+            #     bone.transform(parent_rotation, scale=False)
+            #     bone.translate(parent_translation)
+            #     parent = shape.nodes[parent].parent
+            # if node.parent != -1:
+            #     parent_matrix = edit_bone_table[node.parent].matrix
+            #     bone.transform(parent_matrix, scale=False)
+                #parent_loc = edit_bone_table[node.parent].head
+                #bone.translate(parent_loc)
+            # bone.translate(shape.default_translations[node.parent])
+            
             bone["nodeIndex"] = i
 
             edit_bone_table.append(bone)
