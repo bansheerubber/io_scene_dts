@@ -1,9 +1,11 @@
+import math
+from typing import Dict, List
 import bpy
-from math import ceil
+from math import ceil, pi
 
 from .DsqFile import DsqFile
-from .DtsTypes import Sequence, Quaternion, Vector
-from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, \
+from .DtsTypes import Sequence, Quaternion, Vector, Matrix
+from .util import fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_rotation_data, arm_location_curves, arm_scale_curves, arm_rotation_curves, \
   evaluate_all, find_reference
 
 def get_free_name(name, taken):
@@ -39,11 +41,13 @@ def load(operator, context, filepath,
   print("Resolving nodes...")
 
   found_obs = {}
+  found_armatures: Dict[str, bpy.types.Object] = {}
+  found_bones = {}
 
   # Find all our candidate nodes
   # DSQ is case-insensitive, that's why we can't just [] lookup
   for ob in context.scene.objects:
-    if ob.type in ("EMPTY", "ARMATURE"):
+    if ob.type in ("EMPTY"):
       name = ob.name.lower()
 
       if name in found_obs:
@@ -51,6 +55,30 @@ def load(operator, context, filepath,
         continue
 
       found_obs[name] = ob
+      
+    if ob.type in ("ARMATURE"):
+      name = ob.name.lower()
+
+      if name in found_armatures:
+        print("Warning: Armatures with varying capitalization found ('{}', '{}'), ignoring second".format(found_armatures[name].name, ob.name))
+        continue
+
+      found_armatures[name] = ob
+  
+  use_armature = None
+  for arm_name, armature in found_armatures.items():    
+    for bone in armature.pose.bones:
+      name = bone.name.lower()
+
+      if name in found_bones:
+        print("Warning: Bones with varying capitalization found ('{}', '{}'), ignoring second".format(found_bones[name].name, bone.name))
+        continue
+
+      use_armature = armature
+      found_bones[name] = bone
+        
+    if use_armature is not None:
+      break
 
   nodes = [None] * len(dsq.nodes)
   node_missing = []
@@ -59,10 +87,18 @@ def load(operator, context, filepath,
   for index, name in enumerate(dsq.nodes):
     lower = name.lower()
 
-    if lower in found_obs:
-      nodes[index] = found_obs[lower]
+    if use_armature is not None:
+      # Use bones as nodes
+      if lower in found_bones:
+        nodes[index] = found_bones[lower]
+      else:
+        node_missing.append(name)
     else:
-      node_missing.append(name)
+      # Use objects as nodes
+      if lower in found_obs:
+        nodes[index] = found_obs[lower]
+      else:
+        node_missing.append(name)
 
   if node_missing:
     return fail(operator, "The following nodes from the DSQ file could not be found in your scene:\n" + ", ".join(node_missing))
@@ -118,15 +154,33 @@ def load(operator, context, filepath,
 
     nodesRotation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(nodes, seq.rotationMatters))))
     nodesTranslation = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(nodes, seq.translationMatters))))
-    nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(nodes, seq.scaleMatters))))
+    nodesScale = tuple(map(lambda p: p[0], filter(lambda p: p[1], zip(nodes, seq.scaleMatters))))      
 
     step = 1
 
     for mattersIndex, ob in enumerate(nodesTranslation):
-      curves = ob_location_curves(ob)
+      curves: List[bpy.types.FCurve] = None
+      if use_armature is not None:
+        curves = arm_location_curves(use_armature, ob)
+      else:
+        curves = ob_location_curves(ob)
 
       for frameIndex in range(seq.numKeyframes):
         vec = dsq.translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+          
+        if use_armature is not None:
+          # Armature positions need adjustments because bones are animated in bone local space rather than parent space
+          if ob.parent is not None:
+            vec = Vector((vec.y, vec.x, -1 * vec.z))
+            parent_rest_matrix = ob.bone.parent.matrix_local
+          else:
+            parent_rest_matrix = use_armature.matrix_local
+            
+          pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
+          if frameIndex == 0:
+            print(f"{vec} => {pose_bone_rest_matrix.inverted() @ vec}")
+          vec = pose_bone_rest_matrix.inverted() @ vec
+                      
         if seq.flags & Sequence.Blend:
           if reference_frame is None:
             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
@@ -140,10 +194,28 @@ def load(operator, context, filepath,
           key.co = (last_frame + frameIndex * step, vec[curve.array_index])
 
     for mattersIndex, ob in enumerate(nodesRotation):
-      mode, curves = ob_rotation_curves(ob)
+      curves: List[bpy.types.FCurve] = None
+      if use_armature is not None:
+        mode, curves = arm_rotation_curves(use_armature, ob)
+      else:
+        mode, curves = ob_rotation_curves(ob)
 
       for frameIndex in range(seq.numKeyframes):
         rot = dsq.rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+        
+        if use_armature:
+          if ob.parent is not None:
+            # The quaternion data is assuming a Z-up coordinate system, but we're working with an X-up coordinate system (I know it's weird, but it works). This just transforms the data to that coordinate system.
+            # Also, it only needs to happen for bones with a parent. The root bone is fine without any transformation since it's relative to the armature which is a Z-up coordinate system.
+            rot = Quaternion((rot.w, rot.y, rot.x, -1 * rot.z))
+            parent_rest_matrix = ob.bone.parent.matrix_local
+            # This just transforms the quaternion from parent space to child space (since the data for each bone is relative to the parent of the bone but Blender expects rotations relative to the rest position of the bone.)
+            pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
+            rot = pose_bone_rest_matrix.inverted().to_quaternion() @ rot
+          else:
+            # Ok, so I lied before. We do need to do the transformation, but we have to do it with a 90 degree rotation because the parent is Z-up while the child is X-up
+            rot = Quaternion((math.sqrt(2) / 2, 0, 0, math.sqrt(2) / 2)) @ Quaternion((rot.w, rot.y, rot.x, -1 * rot.z))
+        
         if seq.flags & Sequence.Blend:
           if reference_frame is None:
             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
@@ -161,7 +233,11 @@ def load(operator, context, filepath,
           key.co = (last_frame + frameIndex * step, rot[curve.array_index])
 
     for mattersIndex, ob in enumerate(nodesScale):
-      curves = ob_scale_curves(ob)
+      curves: List[bpy.types.FCurve] = None
+      if use_armature is not None:
+        curves = arm_scale_curves(use_armature, ob)
+      else:
+        curves = ob_scale_curves(ob)
 
       for frameIndex in range(seq.numKeyframes):
         index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex

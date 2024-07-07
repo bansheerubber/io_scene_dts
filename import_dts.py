@@ -2,6 +2,7 @@ import bpy
 import os
 from bpy_extras.io_utils import unpack_list
 import mathutils
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
@@ -245,141 +246,73 @@ def load(operator, context, filepath,
     node_obs_val = {}
 
     if use_armature:
-        root_arm = bpy.data.armatures.new(file_base_name(filepath))
-        root_ob = bpy.data.objects.new(root_arm.name, root_arm)
-        root_ob.show_in_front = True
-
+        
+        # Create a new armature object
+        armature = bpy.data.armatures.new(file_base_name(filepath))
+        root_ob = bpy.data.objects.new(armature.name, armature)
         context.collection.objects.link(root_ob)
         context.view_layer.objects.active = root_ob
-        root_arm.display_type = "STICK" #"OCTAHEDRAL"
-        
-        # bpy.ops.object.mode_set(mode="EDIT")
-        # edit_bones = root_arm.edit_bones
-        
-        # Create an empty for every node
-        # node_bones = {}
-        # for i, node in enumerate(shape.nodes):
-        #     node_name = shape.names[i]
-        #     node_index = i
-        #     # bone = root_arm.edit_bones.new(shape.names[node.name])
-        #     bone = root_arm.edit_bones.new(shape.names[node_index])
-            
-        #     node.bl_ob = bone
-        #     bone["nodeIndex"] = i
-            
-        #     node.mat = shape.default_rotations[i].to_matrix()
-        #     node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
-        #     # if node.parent != -1:
-        #     #     node.mat = shape.nodes[node.parent].mat * node.mat
-            
-        #     node_head = node.mat.to_translation()
-        #     node_tail = node.head + Vector((0, 0, 0.25))
-        #     # node_tail = node.mat.to_translation()
-        #     # node_head = node.tail - Vector((0, 0, 0.25))
-            
-        #     # bone.head = shape.default_translations[i]
-        #     bone.head = node_head
-        #     bone.tail = node_tail
+        bpy.ops.object.mode_set(mode='EDIT')
 
-        #     if node.parent != -1:
-        #         bone.parent = node_bones[node.parent]
-                
-        #     bone.matrix = node.mat
-
-        #     # bone.location = shape.default_translations[i]
-        #     # bone.rotation_mode = "QUATERNION"
-        #     # bone.rotation_quaternion = shape.default_rotations[i]
-        #     # if shape.names[node.name] == "__auto_root__" and ob.rotation_quaternion.magnitude == 0:
-        #     #     ob.rotation_quaternion = (1, 0, 0, 0)
-            
-        #     node_bones[node.name] = bone
-        #     node_obs_val[node] = ob
-        
-        
-        
-        
-        
-        
-        
-        
-
-        # Calculate armature-space matrix, head and tail for each node
-        shape_nodes = {x.name: x for x in shape.nodes}
-        print(len(shape.names))
-        print(len(shape_nodes.keys()))
-        print(shape.names)
-        print(shape_nodes.keys())
-        # for i, node in enumerate(shape.nodes):
-        #     node.mat = shape.default_rotations[i].to_matrix()
-        #     node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
-        #     print(f"{shape.names[node.name]}: -> {shape.names[shape.nodes[node.parent].name]}")
-            
-        #     if node.parent != -1:
-        #         node.mat = shape.nodes[node.parent].mat * node.mat
-                
-            
-        #     # print(f" MATRIX: {node.mat}")
-        #     # print(f" CHILD: {node.firstChild}")
-        #     # print(f" PARENT: {node.parent}")
-        #     # node.head = node.mat.to_translation()
-        #     # node.tail = node.head + Vector((0, 0, 0.25))
-        #     # node.tail = node.mat.to_translation()
-        #     # node.head = node.tail - Vector((0, 0, 0.25))
-
-        bpy.ops.object.mode_set(mode="EDIT")
-
-        edit_bone_table = []
-        bone_names = []
-
+        # Create a bone for every node
+        quats = {}
         for i, node in enumerate(shape.nodes):
-            print(f"{shape.names[node.name]}: -> {shape.names[shape.nodes[node.parent].name]}")
-
-            bone = root_arm.edit_bones.new(shape.names[node.name])
-            # bone.use_connect = True
-            # bone.head = node.head
-            # bone.tail = node.tail
-            bone.head = (0, 0, 0)
-            bone.tail = (0, 0, 0.25)
-
-            bone.use_relative_parent = True
-            if node.parent != -1:
-                bone.parent = edit_bone_table[node.parent]
-
-            # bone.matrix = node.mat
-            node_quaternion = shape.default_rotations[i]
-            node_rot = node_quaternion.to_matrix().to_4x4()
-            node_loc = shape.default_translations[i]
-            bone.transform(node_rot)
-            bone.translate(node_loc)
-                        
-            # bone.head = node_loc
-            # bone.tail = shape.default_translations[i]
-            # bone.tail[0] += 0.25
-            # bone.matrix = node_loc @ node_rot
-            
-            
-            
-            #apply parent locs
-            # parent = node.parent
-            # while parent != -1:
-            #     parent_rotation = shape.default_rotations[node.parent]
-            #     parent_translation = shape.default_translations[node.parent]
-            #     bone.transform(parent_rotation, scale=False)
-            #     bone.translate(parent_translation)
-            #     parent = shape.nodes[parent].parent
-            # if node.parent != -1:
-            #     parent_matrix = edit_bone_table[node.parent].matrix
-            #     bone.transform(parent_matrix, scale=False)
-                #parent_loc = edit_bone_table[node.parent].head
-                #bone.translate(parent_loc)
-            # bone.translate(shape.default_translations[node.parent])
-            
+            bone = armature.edit_bones.new(dedup_name(bpy.data.objects, shape.names[node.name]))
             bone["nodeIndex"] = i
+            node.bl_ob = bone
 
-            edit_bone_table.append(bone)
-            bone_names.append(bone.name)
+            # Setting parent based on node parent if it exists
+            if node.parent != -1:
+                bone.parent = node_obs[node.parent]
+                
+            bone.head = Vector()
+            
+            print(f"{i} ({bone.name}): \tt: {shape.default_translations[i]} \tpt: {None if bone.parent is None else bone.parent.head}")
+            print(f"{i} ({bone.name}): \tr: {shape.default_rotations[i]} \tpr: {None if bone.parent is None else Quaternion(bone.parent.tail-bone.parent.head, bone.parent.roll)}")
+            
+            # Calculate the tail position using a rotation quaternion
+            quat : Quaternion = shape.default_rotations[i]
+            quat = quat.normalized()
+            position = shape.default_translations[i]
+            if bone.parent is not None:
+                # Rotate quaternion relative to parent
+                parent_quat = quats[bone.parent.name] 
+                quat = parent_quat @ quat
+                
+                position = parent_quat @ position
+            quats[bone.name] = quat
+            tail_pos = Vector((0.3, 0, 0))
+            tail_pos.rotate(quat)
+            bone.tail = tail_pos
+            
+            # Align the roll with a y axis rotated by the quaternion
+            y_axis = Vector((0, 1, 0))
+            y_axis.rotate(quat)
+            y_axis.normalize()
+            bone_x_axis : Vector = bone.x_axis.normalized()
+            x_dot_y = bone_x_axis.dot(y_axis)
 
-        bpy.ops.object.mode_set(mode="OBJECT")
+            angle = math.acos(x_dot_y) 
+            
+            x_cross_y = bone_x_axis.cross(y_axis)
+            
+            direction = -1 if bone.tail.normalized().dot(x_cross_y) < 0 else 1            
+            angle = angle * direction
+            bone.roll = angle
+                        
+            if bone.parent is not None:
+                # Rotate quaternion relative to parent
+                parent_loc = bone.parent.head
+                position = parent_loc + position
+                
+            # Set bone head position directly
+            bone.head = bone.head + position
+            bone.tail = bone.tail + position
+
+            node_obs.append(bone)
+            node_obs_val[node] = bone
+
+        bpy.ops.object.mode_set(mode='OBJECT')
     else:
         if reference_keyframe:
             reference_marker = context.scene.timeline_markers.get("reference")
@@ -573,17 +506,18 @@ def load(operator, context, filepath,
 
             add_vertex_groups(mesh, bobj, shape)
 
-            if obj.node != -1:
-                if use_armature:
-                    bobj.parent = root_ob
-                    bobj.parent_bone = bone_names[obj.node]
-                    bobj.parent_type = "BONE"
-                    bobj.matrix_world = shape.nodes[obj.node].mat
+            
+            if use_armature:
+                bobj.parent = root_ob
+                # bobj.parent_bone = bone_names[obj.node]
+                # bobj.parent_type = "BONE"
+                # bobj.matrix_world = shape.nodes[obj.node].mat
 
-                    if mtype == Mesh.SkinType:
-                        modifier = bobj.modifiers.new('Armature', 'ARMATURE')
-                        modifier.object = root_ob
-                else:
+                if mtype == Mesh.SkinType:
+                    modifier = bobj.modifiers.new('Armature', 'ARMATURE')
+                    modifier.object = root_ob
+            else:
+                if obj.node != -1:
                     bobj.parent = node_obs[obj.node]
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
