@@ -292,6 +292,12 @@ def load(operator, context, filepath,
             bone_x_axis : Vector = bone.x_axis.normalized()
             x_dot_y = bone_x_axis.dot(y_axis)
 
+            # Floating point errors sometimes cause issue, so this just fixes that.
+            if x_dot_y < -1 and x_dot_y + 1 > -0.00001:
+                x_dot_y = max(x_dot_y, -1)
+            if x_dot_y > 1 and x_dot_y - 1 < 0.00001:
+                x_dot_y = min(x_dot_y, 1)
+
             angle = math.acos(x_dot_y) 
             
             x_cross_y = bone_x_axis.cross(y_axis)
@@ -349,7 +355,7 @@ def load(operator, context, filepath,
             insert_reference(reference_frame, shape.nodes)
 
     # Try animation?
-    if import_sequences:
+    if import_sequences and not use_armature:
         globalToolIndex = 10
         fps = context.scene.render.fps
 

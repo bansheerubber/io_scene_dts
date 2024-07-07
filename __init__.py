@@ -71,7 +71,7 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     use_armature: BoolProperty(
         name="Beta: Skeleton as armature",
         description="Import bones into an armature instead of empties. Does not work with 'Import sequences'",
-        default=True,
+        default=False,
         )
 
     debug_report: BoolProperty(
