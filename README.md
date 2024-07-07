@@ -2,6 +2,8 @@
 
 This is a fork of the 2.8 fork, which was a fork of the original 2.77 version of this plugin. Some features may not work, but basic mesh importing should be functional in Blender 4.0.
 
+Mesh and sequence importing for this fork was designed specifically to import Onverse dts/dsq files. It may or may not work for dts/dsq files from other games.
+
 ---
 
 Leaving this here for potential maintainers or onlookers:  
