@@ -121,13 +121,13 @@ def create_bobj(context, dmesh, materials, shape, obj):
             indices = indices_pass
 
         dmat = None
+        
+        # if not (prim.type & Primitive.NoMaterial):
+        dmat = shape.materials[prim.type & Primitive.MaterialMask]
 
-        if not (prim.type & Primitive.NoMaterial):
-            dmat = shape.materials[prim.type & Primitive.MaterialMask]
-
-            if dmat not in material_indices:
-                material_indices[dmat] = len(me.materials)
-                me.materials.append(materials[dmat])
+        if dmat not in material_indices:
+            material_indices[dmat] = len(me.materials)
+            me.materials.append(materials[dmat])
 
         if prim.type & Primitive.Strip:
             even = True
