@@ -7,8 +7,7 @@ from mathutils import Euler, Matrix, Quaternion, Vector
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import default_materials, resolve_texture, get_rgb_colors, fail, \
-    ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_vis_curves, ob_rotation_data, evaluate_all
+from .util import arm_location_curves, arm_rotation_curves, arm_scale_curves, arm_vis_curves, default_materials, resolve_texture, get_rgb_colors, fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_vis_curves, ob_rotation_data, evaluate_all
 
 import operator
 from itertools import zip_longest, count
@@ -243,7 +242,9 @@ def load(operator, context, filepath,
         lod_by_mesh[lod.objectDetail] = lod
 
     node_obs = []
+    node_obs_names = []
     node_obs_val = {}
+    bone_node_names = {}
 
     if use_armature:
         
@@ -316,7 +317,9 @@ def load(operator, context, filepath,
             bone.tail = bone.tail + position
 
             node_obs.append(bone)
+            node_obs_names.append(bone.name)
             node_obs_val[node] = bone
+            bone_node_names[node] = bone.name
 
         bpy.ops.object.mode_set(mode='OBJECT')
     else:
@@ -355,7 +358,20 @@ def load(operator, context, filepath,
             insert_reference(reference_frame, shape.nodes)
 
     # Try animation?
-    if import_sequences and not use_armature:
+    if import_sequences:
+        if use_armature:
+            # Convert edit bones to pose bones
+            for bone_key in node_obs_val.keys():
+                bone_name = bone_node_names[bone_key]
+                pose_bone = root_ob.pose.bones[bone_name]
+                node_obs_val[bone_key] = pose_bone
+            
+            # Add the torque visibility property to pose bone objects
+            bpy.types.PoseBone.torque_visibility = bpy.props.FloatProperty(name="Torque Visibility", default=1.0, min=0.0, max=1.0)
+        else:
+            # Add the torque visibility property to empty objects
+            bpy.types.Object.torque_visibility = bpy.props.FloatProperty(name="Torque Visibility", default=1.0, min=0.0, max=1.0)
+        
         globalToolIndex = 10
         fps = context.scene.render.fps
 
@@ -388,10 +404,26 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesTranslation):
                 ob = node_obs_val[node]
-                curves = ob_location_curves(ob)
+                curves = None
+                if use_armature:
+                    curves = arm_location_curves(root_ob, ob)
+                else:
+                    curves = ob_location_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                    
+                    if use_armature:
+                        # Armature positions need adjustments because bones are animated in bone local space rather than parent space
+                        if ob.parent is not None:
+                            vec = Vector((vec.y, vec.x, -1 * vec.z))
+                            parent_rest_matrix = ob.bone.parent.matrix_local
+                        else:
+                            parent_rest_matrix = root_ob.matrix_local
+                            
+                        pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
+                        vec = pose_bone_rest_matrix.inverted() @ vec
+                    
                     if seq.flags & Sequence.Blend:
                         if reference_frame is None:
                             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
@@ -408,10 +440,28 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesRotation):
                 ob = node_obs_val[node]
-                mode, curves = ob_rotation_curves(ob)
+                curves = None
+                if use_armature:
+                    mode, curves = arm_rotation_curves(root_ob, ob)
+                else:
+                    mode, curves = ob_rotation_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     rot = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+                    
+                    if use_armature:
+                        if ob.parent is not None:
+                            # The quaternion data is assuming a Z-up coordinate system, but we're working with an X-up coordinate system (I know it's weird, but it works). This just transforms the data to that coordinate system.
+                            # Also, it only needs to happen for bones with a parent. The root bone is fine without any transformation since it's relative to the armature which is a Z-up coordinate system.
+                            rot = Quaternion((rot.w, rot.y, rot.x, -1 * rot.z))
+                            parent_rest_matrix = ob.bone.parent.matrix_local
+                            # This just transforms the quaternion from parent space to child space (since the data for each bone is relative to the parent of the bone but Blender expects rotations relative to the rest position of the bone.)
+                            pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
+                            rot = pose_bone_rest_matrix.inverted().to_quaternion() @ rot
+                        else:
+                            # Ok, we do need to do a transformation for parentless bones, but it's different since it's relative to the armature rather than another bone.
+                            rot = (ob.bone.matrix_local.inverted().to_quaternion() @ rot ) @ (Quaternion((math.sqrt(2) / 2, 0, 0, -math.sqrt(2) / 2))) @ Quaternion((0, 0, 1, 0))
+                    
                     if seq.flags & Sequence.Blend:
                         if reference_frame is None:
                             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
@@ -432,7 +482,11 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesScale):
                 ob = node_obs_val[node]
-                curves = ob_scale_curves(ob)
+                curves = None
+                if use_armature:
+                    curves = arm_scale_curves(root_ob, ob)
+                else:
+                    curves = ob_scale_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
@@ -459,12 +513,14 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesVis):
                 ob = node_obs_val[node]
-                curves = ob_vis_curves(ob)
+                curves = None
+                if use_armature:
+                    curves = arm_vis_curves(root_ob, ob)
+                else:
+                    curves = ob_vis_curves(ob)
 
-                # if not hasattr(ob, 'vis'):
-                #    ob['vis'] = shape.objectstates[seq.baseObjectState].vis
-
-                ob.torque_vis_props.vis_value = shape.objectstates[seq.baseObjectState].vis
+                # We put the visibility into a custom attribute since the game engine would need to be the one to handle this. 
+                ob.torque_visibility = shape.objectstates[seq.baseObjectState].vis
 
                 for frameIndex in range(seq.numKeyframes):
                     vis = shape.objectstates[seq.baseObjectState + mattersIndex * seq.numKeyframes + frameIndex].vis
@@ -514,14 +570,22 @@ def load(operator, context, filepath,
 
             
             if use_armature:
-                bobj.parent = root_ob
-                # bobj.parent_bone = bone_names[obj.node]
-                # bobj.parent_type = "BONE"
-                # bobj.matrix_world = shape.nodes[obj.node].mat
+                if obj.node != -1:
+                    # Objects with nodes just parent directly to a single bone. Blender is weird and parents to the tail end of the bone, so we just need to move the object to the head of the bone instead.
+                    node_name = node_obs_names[obj.node]
 
-                if mtype == Mesh.SkinType:
-                    modifier = bobj.modifiers.new('Armature', 'ARMATURE')
-                    modifier.object = root_ob
+                    bobj.parent = root_ob
+                    bobj.parent_type = "BONE"
+                    bobj.parent_bone = node_name
+                    
+                    bobj.location.y -= root_ob.data.bones[node_name].length
+                    bobj.rotation_euler = Euler((0, math.pi, -math.pi/2))
+                else:
+                    bobj.parent = root_ob
+
+                    if mtype == Mesh.SkinType:
+                        modifier = bobj.modifiers.new('Armature', 'ARMATURE')
+                        modifier.object = root_ob
             else:
                 if obj.node != -1:
                     bobj.parent = node_obs[obj.node]

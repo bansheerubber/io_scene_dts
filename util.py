@@ -112,6 +112,11 @@ def arm_rotation_curves(arm, bone):
   data_path = f"pose.bones[\"{bone.name}\"].{data_path}"
   return bone.rotation_mode, ob_curves_array(arm, data_path, array_count)
 
+def arm_vis_curves(arm, bone):
+  # data_path = "torque_vis_props.vis_value"
+  data_path = f"pose.bones[\"{bone.name}\"].torque_visibility"
+  return ob_curves_array(arm, data_path, 1)
+
 def ob_location_curves(ob):
   return ob_curves_array(ob, "location", 3)
 
@@ -139,7 +144,9 @@ def ob_rotation_curves(ob):
   return ob.rotation_mode, ob_curves_array(ob, data_path, array_count)
 
 def ob_vis_curves(ob): 
-  return ob_curves_array(ob, 'torque_vis_props.vis_value', 1)
+  # data_path = "torque_vis_props.vis_value"
+  data_path = "torque_visibility"
+  return ob_curves_array(ob, data_path, 1)
 
 def evaluate_all(curves, frame):
   return tuple(map(lambda c: c.evaluate(frame), curves))

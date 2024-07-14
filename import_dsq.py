@@ -213,8 +213,8 @@ def load(operator, context, filepath,
             pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
             rot = pose_bone_rest_matrix.inverted().to_quaternion() @ rot
           else:
-            # Ok, so I lied before. We do need to do the transformation, but we have to do it with a 90 degree rotation because the parent is Z-up while the child is X-up
-            rot = Quaternion((math.sqrt(2) / 2, 0, 0, math.sqrt(2) / 2)) @ Quaternion((rot.w, rot.y, rot.x, -1 * rot.z))
+            # Ok, we do need to do a transformation for parentless bones, but it's different since it's relative to the armature rather than another bone.
+            rot = (ob.bone.matrix_local.inverted().to_quaternion() @ rot ) @ (Quaternion((math.sqrt(2) / 2, 0, 0, -math.sqrt(2) / 2))) @ Quaternion((0, 0, 1, 0))
         
         if seq.flags & Sequence.Blend:
           if reference_frame is None:
