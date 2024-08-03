@@ -20,6 +20,8 @@ if "bpy" in locals():
         importlib.reload(export_dts)
     if "export_dsq" in locals():
         importlib.reload(export_dsq)
+    if "torque_browser_ui" in locals():
+        importlib.reload(torque_browser_ui)
 
 is_developer = False
 try:
@@ -43,6 +45,8 @@ from bpy.props import (BoolProperty,
 from bpy_extras.io_utils import (ImportHelper,
                                  ExportHelper,
                                  )
+
+from . import torque_browser_ui
 
 class ImportDTS(bpy.types.Operator, ImportHelper):
     """Load a Torque DTS File"""
@@ -442,6 +446,8 @@ def register():
     bpy.utils.register_class(TorqueMaterialPanel)
     bpy.utils.register_class(TorqueVisProperties)
     bpy.utils.register_class(TorqueVisPanel)
+    
+    torque_browser_ui.register()
 
     bpy.types.Material.torque_props = PointerProperty(type=TorqueMaterialProperties)
 
@@ -462,6 +468,8 @@ def unregister():
     bpy.utils.unregister_class(TorqueMaterialProperties)
     bpy.utils.unregister_class(TorqueMaterialPanel)
     bpy.utils.unregister_class(TorqueVisPanel)
+    
+    torque_browser_ui.unregister()
 
     del bpy.types.Material.torque_props
 
