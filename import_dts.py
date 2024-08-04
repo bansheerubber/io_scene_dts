@@ -1,12 +1,13 @@
 import bpy
 import os
 from bpy_extras.io_utils import unpack_list
+import mathutils
+from mathutils import Euler, Matrix, Quaternion, Vector
 
 from .DtsShape import DtsShape
 from .DtsTypes import *
 from .write_report import write_debug_report
-from .util import default_materials, resolve_texture, get_rgb_colors, fail, \
-    ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_vis_curves, ob_rotation_data, evaluate_all
+from .util import arm_location_curves, arm_rotation_curves, arm_scale_curves, arm_vis_curves, default_materials, resolve_texture, get_rgb_colors, fail, ob_location_curves, ob_scale_curves, ob_rotation_curves, ob_vis_curves, ob_rotation_data, evaluate_all
 
 import operator
 from itertools import zip_longest, count
@@ -108,10 +109,10 @@ def create_bobj(context, dmesh, materials, shape, obj):
     me = bpy.data.meshes.new("Mesh")
 
     faces = []
+    face_mats = []
     material_indices = {}
 
     indices_pass = index_pass()
-
     for prim in dmesh.primitives:
         if prim.type & Primitive.Indexed:
             indices = dmesh.indices
@@ -119,64 +120,63 @@ def create_bobj(context, dmesh, materials, shape, obj):
             indices = indices_pass
 
         dmat = None
+        
+        # if not (prim.type & Primitive.NoMaterial):
+        dmat = shape.materials[prim.type & Primitive.MaterialMask]
 
-        if not (prim.type & Primitive.NoMaterial):
-            dmat = shape.materials[prim.type & Primitive.MaterialMask]
-
-            if dmat not in material_indices:
-                material_indices[dmat] = len(me.materials)
-                me.materials.append(materials[dmat])
+        if dmat not in material_indices:
+            material_indices[dmat] = len(me.materials)
+            me.materials.append(materials[dmat])
 
         if prim.type & Primitive.Strip:
             even = True
             for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
                 if even:
-                    faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+                    faces.append((indices[i], indices[i - 1], indices[i - 2]))
+                    face_mats.append(dmat)
                 else:
-                    faces.append(((indices[i - 2], indices[i - 1], indices[i]), dmat))
+                    faces.append((indices[i - 2], indices[i - 1], indices[i]))
+                    face_mats.append(dmat)
                 even = not even
         elif prim.type & Primitive.Fan:
             even = True
             for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements):
                 if even:
-                    faces.append(((indices[i], indices[i - 1], indices[0]), dmat))
+                    faces.append((indices[i], indices[i - 1], indices[0]))
+                    face_mats.append(dmat)
                 else:
-                    faces.append(((indices[0], indices[i - 1], indices[i]), dmat))
+                    faces.append((indices[0], indices[i - 1], indices[i]))
+                    face_mats.append(dmat)
                 even = not even
         else: # Default to Triangle Lists (prim.type & Primitive.Triangles)
             for i in range(prim.firstElement + 2, prim.firstElement + prim.numElements, 3):
-                faces.append(((indices[i], indices[i - 1], indices[i - 2]), dmat))
+                faces.append((indices[i], indices[i - 1], indices[i - 2]))
+                face_mats.append(dmat)
 
-    me.vertices.add(len(dmesh.verts))
-    me.vertices.foreach_set("co", unpack_list(dmesh.verts))
-    me.vertices.foreach_set("normal", unpack_list(dmesh.normals))
+    
+    me.from_pydata(dmesh.verts, [], faces)
+    for poly, mat_index in zip(me.polygons, face_mats):
+        poly.material_index = material_indices[mat_index]
 
-    me.polygons.add(len(faces))
-    me.loops.add(len(faces) * 3)
+    # Create a new UV map if it doesn't exist
+    if not me.uv_layers:
+        me.uv_layers.new()
+        
+    # Assign UV coordinates to the vertices
+    uv_layer = me.uv_layers.active.data
+    for poly in me.polygons:
+        for loop_index in poly.loop_indices:
+            loop = me.loops[loop_index]
+            uv_layer[loop.index].uv = (dmesh.tverts[loop.vertex_index][0], 1 - dmesh.tverts[loop.vertex_index][1])
 
     # gyt add: we have to create the bobj here, because we need it to do UV shit in 2.8
     bobj = bpy.data.objects.new(dedup_name(bpy.data.objects, shape.names[obj.name]), me)
-
-    bpy.ops.mesh.uv_texture_add({"object": bobj})
-    uvs = me.uv_layers[0]
-
-    for i, ((verts, dmat), poly) in enumerate(zip(faces, me.polygons)):
-        poly.use_smooth = True # DTS geometry is always smooth shaded
-        poly.loop_total = 3
-        poly.loop_start = i * 3
-
-        if dmat:
-            poly.material_index = material_indices[dmat]
-
-        for j, index in zip(poly.loop_indices, verts):
-            me.loops[j].vertex_index = index
-            uv = dmesh.tverts[index]
-            uvs.data[j].uv = (uv.x, 1 - uv.y)
 
     me.validate()
     me.update()
 
     return bobj
+
 
 def file_base_name(filepath):
     return os.path.basename(filepath).rsplit(".", 1)[0]
@@ -242,50 +242,86 @@ def load(operator, context, filepath,
         lod_by_mesh[lod.objectDetail] = lod
 
     node_obs = []
+    node_obs_names = []
     node_obs_val = {}
+    bone_node_names = {}
 
     if use_armature:
-        root_arm = bpy.data.armatures.new(file_base_name(filepath))
-        root_ob = bpy.data.objects.new(root_arm.name, root_arm)
-        root_ob.show_x_ray = True
-
+        
+        # Create a new armature object
+        armature = bpy.data.armatures.new(file_base_name(filepath))
+        root_ob = bpy.data.objects.new(armature.name, armature)
         context.collection.objects.link(root_ob)
-        context.collection.objects.active = root_ob
+        context.view_layer.objects.active = root_ob
+        bpy.ops.object.mode_set(mode='EDIT')
 
-        # Calculate armature-space matrix, head and tail for each node
+        # Create a bone for every node
+        quats = {}
         for i, node in enumerate(shape.nodes):
-            node.mat = shape.default_rotations[i].to_matrix()
-            node.mat = Matrix.Translation(shape.default_translations[i]) * node.mat.to_4x4()
-            if node.parent != -1:
-                node.mat = shape.nodes[node.parent].mat * node.mat
-            # node.head = node.mat.to_translation()
-            # node.tail = node.head + Vector((0, 0, 0.25))
-            # node.tail = node.mat.to_translation()
-            # node.head = node.tail - Vector((0, 0, 0.25))
-
-        bpy.ops.object.mode_set(mode="EDIT")
-
-        edit_bone_table = []
-        bone_names = []
-
-        for i, node in enumerate(shape.nodes):
-            bone = root_arm.edit_bones.new(shape.names[node.name])
-            # bone.use_connect = True
-            # bone.head = node.head
-            # bone.tail = node.tail
-            bone.head = (0, 0, -0.25)
-            bone.tail = (0, 0, 0)
-
-            if node.parent != -1:
-                bone.parent = edit_bone_table[node.parent]
-
-            bone.matrix = node.mat
+            bone = armature.edit_bones.new(dedup_name(bpy.data.objects, shape.names[node.name]))
             bone["nodeIndex"] = i
+            node.bl_ob = bone
 
-            edit_bone_table.append(bone)
-            bone_names.append(bone.name)
+            # Setting parent based on node parent if it exists
+            if node.parent != -1:
+                bone.parent = node_obs[node.parent]
+                
+            bone.head = Vector()
+            
+            print(f"{i} ({bone.name}): \tt: {shape.default_translations[i]} \tpt: {None if bone.parent is None else bone.parent.head}")
+            print(f"{i} ({bone.name}): \tr: {shape.default_rotations[i]} \tpr: {None if bone.parent is None else Quaternion(bone.parent.tail-bone.parent.head, bone.parent.roll)}")
+            
+            # Calculate the tail position using a rotation quaternion
+            quat : Quaternion = shape.default_rotations[i]
+            quat = quat.normalized()
+            position = shape.default_translations[i]
+            if bone.parent is not None:
+                # Rotate quaternion relative to parent
+                parent_quat = quats[bone.parent.name] 
+                quat = parent_quat @ quat
+                
+                position = parent_quat @ position
+            quats[bone.name] = quat
+            tail_pos = Vector((0.3, 0, 0))
+            tail_pos.rotate(quat)
+            bone.tail = tail_pos
+            
+            # Align the roll with a y axis rotated by the quaternion
+            y_axis = Vector((0, 1, 0))
+            y_axis.rotate(quat)
+            y_axis.normalize()
+            bone_x_axis : Vector = bone.x_axis.normalized()
+            x_dot_y = bone_x_axis.dot(y_axis)
 
-        bpy.ops.object.mode_set(mode="OBJECT")
+            # Floating point errors sometimes cause issue, so this just fixes that.
+            if x_dot_y < -1 and x_dot_y + 1 > -0.00001:
+                x_dot_y = max(x_dot_y, -1)
+            if x_dot_y > 1 and x_dot_y - 1 < 0.00001:
+                x_dot_y = min(x_dot_y, 1)
+
+            angle = math.acos(x_dot_y) 
+            
+            x_cross_y = bone_x_axis.cross(y_axis)
+            
+            direction = -1 if bone.tail.normalized().dot(x_cross_y) < 0 else 1            
+            angle = angle * direction
+            bone.roll = angle
+                        
+            if bone.parent is not None:
+                # Rotate quaternion relative to parent
+                parent_loc = bone.parent.head
+                position = parent_loc + position
+                
+            # Set bone head position directly
+            bone.head = bone.head + position
+            bone.tail = bone.tail + position
+
+            node_obs.append(bone)
+            node_obs_names.append(bone.name)
+            node_obs_val[node] = bone
+            bone_node_names[node] = bone.name
+
+        bpy.ops.object.mode_set(mode='OBJECT')
     else:
         if reference_keyframe:
             reference_marker = context.scene.timeline_markers.get("reference")
@@ -323,6 +359,19 @@ def load(operator, context, filepath,
 
     # Try animation?
     if import_sequences:
+        if use_armature:
+            # Convert edit bones to pose bones
+            for bone_key in node_obs_val.keys():
+                bone_name = bone_node_names[bone_key]
+                pose_bone = root_ob.pose.bones[bone_name]
+                node_obs_val[bone_key] = pose_bone
+            
+            # Add the torque visibility property to pose bone objects
+            bpy.types.PoseBone.torque_visibility = bpy.props.FloatProperty(name="Torque Visibility", default=1.0, min=0.0, max=1.0)
+        else:
+            # Add the torque visibility property to empty objects
+            bpy.types.Object.torque_visibility = bpy.props.FloatProperty(name="Torque Visibility", default=1.0, min=0.0, max=1.0)
+        
         globalToolIndex = 10
         fps = context.scene.render.fps
 
@@ -355,10 +404,26 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesTranslation):
                 ob = node_obs_val[node]
-                curves = ob_location_curves(ob)
+                curves = None
+                if use_armature:
+                    curves = arm_location_curves(root_ob, ob)
+                else:
+                    curves = ob_location_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     vec = shape.node_translations[seq.baseTranslation + mattersIndex * seq.numKeyframes + frameIndex]
+                    
+                    if use_armature:
+                        # Armature positions need adjustments because bones are animated in bone local space rather than parent space
+                        if ob.parent is not None:
+                            vec = Vector((vec.y, vec.x, -1 * vec.z))
+                            parent_rest_matrix = ob.bone.parent.matrix_local
+                        else:
+                            parent_rest_matrix = root_ob.matrix_local
+                            
+                        pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
+                        vec = pose_bone_rest_matrix.inverted() @ vec
+                    
                     if seq.flags & Sequence.Blend:
                         if reference_frame is None:
                             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
@@ -375,10 +440,28 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesRotation):
                 ob = node_obs_val[node]
-                mode, curves = ob_rotation_curves(ob)
+                curves = None
+                if use_armature:
+                    mode, curves = arm_rotation_curves(root_ob, ob)
+                else:
+                    mode, curves = ob_rotation_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     rot = shape.node_rotations[seq.baseRotation + mattersIndex * seq.numKeyframes + frameIndex]
+                    
+                    if use_armature:
+                        if ob.parent is not None:
+                            # The quaternion data is assuming a Z-up coordinate system, but we're working with an X-up coordinate system (I know it's weird, but it works). This just transforms the data to that coordinate system.
+                            # Also, it only needs to happen for bones with a parent. The root bone is fine without any transformation since it's relative to the armature which is a Z-up coordinate system.
+                            rot = Quaternion((rot.w, rot.y, rot.x, -1 * rot.z))
+                            parent_rest_matrix = ob.bone.parent.matrix_local
+                            # This just transforms the quaternion from parent space to child space (since the data for each bone is relative to the parent of the bone but Blender expects rotations relative to the rest position of the bone.)
+                            pose_bone_rest_matrix = parent_rest_matrix.inverted() @ ob.bone.matrix_local
+                            rot = pose_bone_rest_matrix.inverted().to_quaternion() @ rot
+                        else:
+                            # Ok, we do need to do a transformation for parentless bones, but it's different since it's relative to the armature rather than another bone.
+                            rot = (ob.bone.matrix_local.inverted().to_quaternion() @ rot ) @ (Quaternion((math.sqrt(2) / 2, 0, 0, -math.sqrt(2) / 2))) @ Quaternion((0, 0, 1, 0))
+                    
                     if seq.flags & Sequence.Blend:
                         if reference_frame is None:
                             return fail(operator, "Missing 'reference' marker for blend animation '{}'".format(name))
@@ -399,7 +482,11 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesScale):
                 ob = node_obs_val[node]
-                curves = ob_scale_curves(ob)
+                curves = None
+                if use_armature:
+                    curves = arm_scale_curves(root_ob, ob)
+                else:
+                    curves = ob_scale_curves(ob)
 
                 for frameIndex in range(seq.numKeyframes):
                     index = seq.baseScale + mattersIndex * seq.numKeyframes + frameIndex
@@ -426,12 +513,14 @@ def load(operator, context, filepath,
 
             for mattersIndex, node in enumerate(nodesVis):
                 ob = node_obs_val[node]
-                curves = ob_vis_curves(ob)
+                curves = None
+                if use_armature:
+                    curves = arm_vis_curves(root_ob, ob)
+                else:
+                    curves = ob_vis_curves(ob)
 
-                # if not hasattr(ob, 'vis'):
-                #    ob['vis'] = shape.objectstates[seq.baseObjectState].vis
-
-                ob.torque_vis_props.vis_value = shape.objectstates[seq.baseObjectState].vis
+                # We put the visibility into a custom attribute since the game engine would need to be the one to handle this. 
+                ob.torque_visibility = shape.objectstates[seq.baseObjectState].vis
 
                 for frameIndex in range(seq.numKeyframes):
                     vis = shape.objectstates[seq.baseObjectState + mattersIndex * seq.numKeyframes + frameIndex].vis
@@ -462,11 +551,6 @@ def load(operator, context, filepath,
 
     # Then put objects in the armatures
     for obj in shape.objects:
-        if obj.node == -1:
-            print('Warning: Object {} is not attached to a node, ignoring'
-                  .format(shape.names[obj.name]))
-            continue
-
         for meshIndex in range(obj.numMeshes):
             mesh = shape.meshes[obj.firstMesh + meshIndex]
             mtype = mesh.type
@@ -484,17 +568,26 @@ def load(operator, context, filepath,
 
             add_vertex_groups(mesh, bobj, shape)
 
-            if obj.node != -1:
-                if use_armature:
+            
+            if use_armature:
+                if obj.node != -1:
+                    # Objects with nodes just parent directly to a single bone. Blender is weird and parents to the tail end of the bone, so we just need to move the object to the head of the bone instead.
+                    node_name = node_obs_names[obj.node]
+
                     bobj.parent = root_ob
-                    bobj.parent_bone = bone_names[obj.node]
                     bobj.parent_type = "BONE"
-                    bobj.matrix_world = shape.nodes[obj.node].mat
+                    bobj.parent_bone = node_name
+                    
+                    bobj.location.y -= root_ob.data.bones[node_name].length
+                    bobj.rotation_euler = Euler((0, math.pi, -math.pi/2))
+                else:
+                    bobj.parent = root_ob
 
                     if mtype == Mesh.SkinType:
                         modifier = bobj.modifiers.new('Armature', 'ARMATURE')
                         modifier.object = root_ob
-                else:
+            else:
+                if obj.node != -1:
                     bobj.parent = node_obs[obj.node]
 
             lod_name = shape.names[lod_by_mesh[meshIndex].name]
